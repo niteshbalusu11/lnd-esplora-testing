@@ -1,0 +1,56 @@
+services:
+  bitcoind:
+    image: bitcoin/bitcoin:30
+    command:
+      [
+        "bitcoind",
+        "-regtest",
+        "-printtoconsole",
+        "-rpcbind=0.0.0.0",
+        "-rpcallowip=0.0.0.0/0",
+        "-fallbackfee=0.00001",
+        "-server",
+        "-txindex",
+        "-blockfilterindex",
+        "-rpcuser=bitcoin",
+        "-rpcpassword=bitcoin",
+      ]
+    volumes:
+      - bitcoind:/home/bitcoin/.bitcoin
+    ports:
+      - "18443:18443"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -rpcconnect=127.0.0.1 getblockchaininfo || exit 1",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  electrs:
+    image: mempool/electrs:latest
+    environment:
+      - RUST_BACKTRACE=1
+    command:
+      [
+        "--network=regtest",
+        "--daemon-rpc-addr=bitcoind:18443",
+        "--cookie=bitcoin:bitcoin",
+        "--http-addr=0.0.0.0:3002",
+        "--electrum-rpc-addr=0.0.0.0:50001",
+        "--cors=*",
+        "-vvvv",
+      ]
+    volumes:
+      - bitcoind:/home/bitcoin/.bitcoin
+    ports:
+      - "3002:3002"
+      - "50001:50001"
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+
+volumes:
+  bitcoind:
