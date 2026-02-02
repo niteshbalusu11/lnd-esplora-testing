@@ -44,7 +44,7 @@ services:
         "-vvvv",
       ]
     volumes:
-      - bitcoind:/home/bitcoin/.bitcoin
+      - bitcoind:/root/.bitcoin/
     ports:
       - "3002:3002"
       - "50001:50001"

@@ -32,10 +32,13 @@ ALICE_PORT=10027
 ALICE_REST=8097
 ALICE_PEER=9752
 
-# Bitcoin RPC Configuration
-RPC_USER="${RPC_USER:-second}"
-RPC_PASS="${RPC_PASS:-ark}"
+# Bitcoin RPC Configuration (defaults match docker-compose.yaml)
+RPC_USER="${RPC_USER:-bitcoin}"
+RPC_PASS="${RPC_PASS:-bitcoin}"
 DOCKER_BITCOIN="${DOCKER_BITCOIN:-}"
+
+# LND source directory (where to build lnd-esplora from)
+LND_DIR="${LND_DIR:-../lnd}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -130,11 +133,11 @@ check_prerequisites() {
     fi
     log_info "Esplora API reachable at $ESPLORA_URL"
 
-    log_info "Building lnd-esplora..."
-    go build -o lnd-esplora ./cmd/lnd
+    log_info "Building lnd-esplora from $LND_DIR..."
+    (cd "$LND_DIR" && go build -o "$OLDPWD/lnd-esplora" ./cmd/lnd)
 
     log_info "Building lncli-esplora..."
-    go build -o lncli-esplora ./cmd/lncli
+    (cd "$LND_DIR" && go build -o "$OLDPWD/lncli-esplora" ./cmd/lncli)
 
     if ! command -v expect &> /dev/null; then
         log_error "expect not found. Please install expect (brew install expect or apt-get install expect)"

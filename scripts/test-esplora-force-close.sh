@@ -32,9 +32,12 @@ BOB_PORT=10024
 BOB_REST=8094
 BOB_PEER=9749
 
-# Bitcoin RPC Configuration
-RPC_USER="${RPC_USER:-second}"
-RPC_PASS="${RPC_PASS:-ark}"
+# LND source directory
+LND_DIR="${LND_DIR:-../lnd}"
+
+# Bitcoin RPC Configuration (defaults match docker-compose.yaml)
+RPC_USER="${RPC_USER:-bitcoin}"
+RPC_PASS="${RPC_PASS:-bitcoin}"
 DOCKER_BITCOIN="${DOCKER_BITCOIN:-}"
 
 # Colors for output
@@ -135,11 +138,13 @@ check_prerequisites() {
     fi
     log_info "Esplora API reachable at $ESPLORA_URL"
 
-    log_info "Building lnd-esplora..."
-    go build -o lnd-esplora ./cmd/lnd
+    log_info "Building lnd-esplora from $LND_DIR..."
+    (cd "$LND_DIR" && go build -o lnd-esplora ./cmd/lnd)
+    cp "$LND_DIR/lnd-esplora" ./lnd-esplora
 
-    log_info "Building lncli-esplora..."
-    go build -o lncli-esplora ./cmd/lncli
+    log_info "Building lncli-esplora from $LND_DIR..."
+    (cd "$LND_DIR" && go build -o lncli-esplora ./cmd/lncli)
+    cp "$LND_DIR/lncli-esplora" ./lncli-esplora
 
     log_info "All prerequisites met!"
 }

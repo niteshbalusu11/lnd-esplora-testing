@@ -11,12 +11,8 @@ Test environment for LND's Esplora backend implementation.
 ## Quick Start
 
 ```bash
-# Start bitcoind + electrs
-just up
-
-# Create a wallet and generate some blocks
-just create-wallet
-just generate 101
+# Start everything (containers, wallet, 150 blocks)
+just setup-everything
 
 # Check it's working
 just info
@@ -26,6 +22,7 @@ curl http://localhost:3002/blocks/tip/height
 ## Available Commands
 
 ```bash
+just setup-everything # Start containers, create wallet, generate 150 blocks
 just up              # Start the environment
 just down            # Stop and remove containers
 just stop            # Stop containers
@@ -53,13 +50,28 @@ just test-scb-restore   # SCB disaster recovery test
 just test-all           # Run all tests
 ```
 
+### Environment Variables
+
+| Variable         | Default         | Description                        |
+| ---------------- | --------------- | ---------------------------------- |
+| `LND_DIR`        | `../lnd`        | Path to LND source directory       |
+| `RPC_USER`       | `bitcoin`       | Bitcoin RPC username               |
+| `RPC_PASS`       | `bitcoin`       | Bitcoin RPC password               |
+| `DOCKER_BITCOIN` | (auto-detected) | Docker container name for bitcoind |
+
+Example with custom LND path:
+
+```bash
+LND_DIR=/path/to/lnd just test-e2e
+```
+
 ## Endpoints
 
-| Service  | Port  | URL                        |
-| -------- | ----- | -------------------------- |
-| Esplora  | 3002  | http://localhost:3002      |
-| Electrum | 50001 | tcp://localhost:50001      |
-| Bitcoin  | 18443 | http://localhost:18443     |
+| Service  | Port  | URL                    |
+| -------- | ----- | ---------------------- |
+| Esplora  | 3002  | http://localhost:3002  |
+| Electrum | 50001 | tcp://localhost:50001  |
+| Bitcoin  | 18443 | http://localhost:18443 |
 
 ## Credentials
 

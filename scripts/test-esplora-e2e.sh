@@ -21,10 +21,11 @@
 #   ./scripts/test-esplora-e2e.sh http://127.0.0.1:3002
 #
 # Environment Variables:
+#   LND_DIR          - Path to LND source directory (default: "../lnd")
 #   BITCOIN_CLI      - Path to bitcoin-cli or docker command (auto-detected)
 #   DOCKER_BITCOIN   - Set to container name if using Docker (e.g., "bitcoind")
-#   RPC_USER         - Bitcoin RPC username (default: "second")
-#   RPC_PASS         - Bitcoin RPC password (default: "ark")
+#   RPC_USER         - Bitcoin RPC username (default: "bitcoin")
+#   RPC_PASS         - Bitcoin RPC password (default: "bitcoin")
 #   REBUILD          - Set to "1" to force rebuild of lnd
 #
 
@@ -32,6 +33,7 @@ set -e
 
 # Configuration
 ESPLORA_URL="${1:-http://127.0.0.1:3002}"
+LND_DIR="${LND_DIR:-../lnd}"
 TEST_DIR="./test-esplora-e2e"
 ALICE_DIR="$TEST_DIR/alice"
 BOB_DIR="$TEST_DIR/bob"
@@ -42,9 +44,9 @@ BOB_PORT=10016
 BOB_REST=8090
 BOB_PEER=9739
 
-# Bitcoin RPC Configuration
-RPC_USER="${RPC_USER:-second}"
-RPC_PASS="${RPC_PASS:-ark}"
+# Bitcoin RPC Configuration (defaults match docker-compose.yaml)
+RPC_USER="${RPC_USER:-bitcoin}"
+RPC_PASS="${RPC_PASS:-bitcoin}"
 DOCKER_BITCOIN="${DOCKER_BITCOIN:-}"
 
 # Colors for output
@@ -188,11 +190,22 @@ check_prerequisites() {
 build_lnd() {
     log_step "Building LND..."
 
-    go build -o lnd-esplora ./cmd/lnd
+    if [ ! -d "$LND_DIR" ]; then
+        log_error "LND source directory not found: $LND_DIR"
+        log_error "Set LND_DIR environment variable to your LND source path"
+        exit 1
+    fi
+
+    local orig_dir=$(pwd)
+    cd "$LND_DIR"
+
+    go build -o "$orig_dir/lnd-esplora" ./cmd/lnd
     log_info "Built lnd-esplora"
 
-    go build -o lncli-esplora ./cmd/lncli
+    go build -o "$orig_dir/lncli-esplora" ./cmd/lncli
     log_info "Built lncli-esplora"
+
+    cd "$orig_dir"
 }
 
 setup_directories() {

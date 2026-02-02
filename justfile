@@ -10,13 +10,20 @@ default:
 up:
     docker compose up -d
 
-# Stop the regtest environment
+# Stop the regtest environment and remove volumes
 down:
-    docker compose down
+    docker compose down -v
 
 # Stop containers without removing them
 stop:
     docker compose stop
+
+# Setup everything: start containers, create wallet, generate 150 blocks
+setup-everything:
+    just up
+    sleep 3
+    just create-wallet
+    just generate 150
 
 # View logs
 logs *args:
@@ -29,10 +36,6 @@ logs-bitcoind:
 # View electrs logs
 logs-electrs:
     docker compose logs -f electrs
-
-# Reset everything (remove volumes)
-reset:
-    docker compose down -v
 
 # Bitcoin CLI shortcut
 bcli *args:

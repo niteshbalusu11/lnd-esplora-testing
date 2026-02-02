@@ -4,3 +4,5 @@ test-esplora-wallet-rescan
 test-esplora-scb-restore
 test-esplora-wallet-rescan-testnet
 test-esplora-rescan-only
+lnd-esplora
+lncli-esplora
