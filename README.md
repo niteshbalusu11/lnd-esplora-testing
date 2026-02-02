@@ -24,9 +24,8 @@ curl http://localhost:3002/blocks/tip/height
 ```bash
 just setup-everything # Start containers, create wallet, generate 150 blocks
 just up              # Start the environment
-just down            # Stop and remove containers
+just down            # Stop and remove containers and volumes
 just stop            # Stop containers
-just reset           # Remove everything including volumes
 just logs            # View all logs
 just logs-bitcoind   # View bitcoind logs
 just logs-electrs    # View electrs logs
