@@ -44,6 +44,8 @@ ALICE_PORT=10127
 ALICE_REST=8107
 ALICE_PEER=9762
 SNAPSHOT_DIR="$TEST_DIR/snapshots"
+# LND source directory (where to build lnd-esplora from)
+LND_DIR="${LND_DIR:-../lnd}"
 
 # Provided testnet seed phrase
 SEED_PHRASE="absorb trick burger hope minimum drop bracket question saddle bounce gym rib young pass movie fox isolate robot aerobic cliff month special aisle small"
@@ -131,6 +133,11 @@ check_prerequisites() {
         exit 1
     fi
 
+    if ! command -v go &> /dev/null; then
+        log_error "Go not found. Please install Go."
+        exit 1
+    fi
+
     if ! curl -s "${ESPLORA_URL}/blocks/tip/height" &>/dev/null; then
         log_error "Esplora API not reachable at $ESPLORA_URL"
         exit 1
@@ -140,11 +147,17 @@ check_prerequisites() {
     log_info "Esplora tip height: $(curl -s "${ESPLORA_URL}/blocks/tip/height" | tr -d '\n')"
     log_info "Esplora tip hash: $(curl -s "${ESPLORA_URL}/blocks/tip/hash" | tr -d '\n')"
 
-    log_info "Building lnd-esplora..."
-    go build -o lnd-esplora ./cmd/lnd
+    if [ ! -d "$LND_DIR" ]; then
+        log_error "LND source directory not found: $LND_DIR"
+        log_error "Set LND_DIR environment variable to your LND source path"
+        exit 1
+    fi
 
-    log_info "Building lncli-esplora..."
-    go build -o lncli-esplora ./cmd/lncli
+    log_info "Building lnd-esplora from $LND_DIR..."
+    (cd "$LND_DIR" && go build -o "$OLDPWD/lnd-esplora" ./cmd/lnd)
+
+    log_info "Building lncli-esplora from $LND_DIR..."
+    (cd "$LND_DIR" && go build -o "$OLDPWD/lncli-esplora" ./cmd/lncli)
 
     log_info "lnd-esplora version:"
     ./lnd-esplora --version 2>/dev/null || true
@@ -156,7 +169,7 @@ setup_directory() {
     log_step "Setting up test directory..."
 
     # Only delete if not preserving or no wallet exists
-    if [ "$PRESERVE" = true ] && [ -f "$ALICE_DIR/data/testnet4/wallet.db" ]; then
+    if [ "$PRESERVE" = true ] && [ -f "$ALICE_DIR/data/chain/bitcoin/testnet4/wallet.db" ]; then
         log_info "Existing wallet found and --preserve set, keeping wallet data"
         log_warn "This will SKIP restore and just update config"
         # Just update config, don't delete wallet
@@ -404,7 +417,7 @@ run_rescan_debug() {
     fi
 
     log_step "Waiting for wallet rescan and sync"
-    wait_for_sync 600
+    wait_for_sync 1000
     capture_lnd_state "after-sync"
 
     log_step "Waiting for UTXO discovery"

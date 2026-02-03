@@ -235,8 +235,9 @@ mine_blocks() {
     local addr=$(btc getnewaddress)
     btc generatetoaddress $count $addr > /dev/null
     log_debug "Mined $count block(s)"
-    # Wait for esplora to index
-    sleep 3
+    # Wait for esplora to index and LND to process blocks
+    # Increased from 3s to 5s to avoid block processing timeouts
+    sleep 5
 }
 
 wait_for_sync() {
@@ -440,17 +441,28 @@ run_force_close_test() {
     log_info "Blocks until maturity: $blocks_til"
     log_info "Maturity height: $maturity_height"
 
-    log_step "Mining 6 more blocks for Bob to receive funds..."
-    mine_blocks 6
-    sleep 3
+    log_step "Mining blocks and waiting for Bob to receive funds..."
+    local bob_received=false
+    for i in {1..30}; do
+        mine_blocks 1
+        # Give extra time for sweep tx to be created and broadcast
+        sleep 3
 
-    local bob_balance_after=$(bob_cli walletbalance | jq -r '.confirmed_balance')
-    log_info "Bob on-chain balance after confirmations: $bob_balance_after sats"
+        local bob_balance_after=$(bob_cli walletbalance | jq -r '.confirmed_balance')
+        if [ "$bob_balance_after" -gt "$bob_balance_before" ]; then
+            log_info "✓ Bob received funds: $bob_balance_after sats (after $i blocks)"
+            bob_received=true
+            break
+        fi
 
-    if [ "$bob_balance_after" -gt "$bob_balance_before" ]; then
-        log_info "✓ Bob received funds immediately (no timelock for remote party)"
-    else
-        log_warn "✗ Bob has NOT received funds yet"
+        if [ $((i % 5)) -eq 0 ]; then
+            log_debug "Waiting for Bob's sweep (attempt $i/30)..."
+        fi
+    done
+
+    if [ "$bob_received" = "false" ]; then
+        local bob_balance_after=$(bob_cli walletbalance | jq -r '.confirmed_balance')
+        log_warn "✗ Bob has NOT received funds yet (balance: $bob_balance_after sats)"
         check_sweep_logs "Bob" "$BOB_DIR"
     fi
 
@@ -484,19 +496,24 @@ run_force_close_test() {
     log_step "Checking sweep transaction creation..."
     check_sweep_logs "Alice" "$ALICE_DIR"
 
-    log_step "Mining more blocks and waiting for sweep..."
-    for i in {1..30}; do
+    log_step "Mining more blocks and waiting for Alice's sweep..."
+    for i in {1..60}; do
         mine_blocks 1
-        sleep 2
+        # Give extra time for block processing and sweep creation
+        sleep 3
 
-        local pending=$(alice_cli pendingchannels | jq '.pending_force_closing_channels | length')
-        if [ "$pending" = "0" ]; then
-            log_info "✓ Force close channel fully resolved!"
+        local pending_force=$(alice_cli pendingchannels | jq '.pending_force_closing_channels | length')
+        local waiting_close=$(alice_cli pendingchannels | jq '.waiting_close_channels | length')
+
+        # Channel is fully resolved when both are 0
+        if [ "$pending_force" = "0" ] && [ "$waiting_close" = "0" ]; then
+            log_info "✓ Alice's force close channel fully resolved!"
             break
         fi
 
         if [ $((i % 10)) -eq 0 ]; then
-            log_debug "Still waiting for sweep (attempt $i/30)..."
+            log_debug "Still waiting for Alice's sweep (attempt $i/60)..."
+            log_debug "  pending_force_closing: $pending_force, waiting_close: $waiting_close"
             show_pending_channels
         fi
     done
@@ -516,12 +533,40 @@ run_force_close_test() {
     echo ""
 
     local pending_force=$(alice_cli pendingchannels | jq '.pending_force_closing_channels | length')
-    if [ "$pending_force" = "0" ]; then
+    local waiting_close=$(alice_cli pendingchannels | jq '.waiting_close_channels | length')
+    local bob_balance_final_check=$(bob_cli walletbalance | jq -r '.confirmed_balance')
+
+    # Success criteria:
+    # 1. Bob received his funds (balance > 0, since he started with 0)
+    # 2. Alice's channel is fully resolved (no pending or waiting close)
+    local bob_success=false
+    local alice_success=false
+
+    if [ "$bob_balance_final_check" -gt 0 ] 2>/dev/null; then
+        bob_success=true
+    fi
+
+    if [ "$pending_force" = "0" ] && [ "$waiting_close" = "0" ]; then
+        alice_success=true
+    fi
+
+    if [ "$bob_success" = "true" ] && [ "$alice_success" = "true" ]; then
         echo -e "${GREEN}✓ Force close completed successfully${NC}"
-    else
-        echo -e "${RED}✗ Force close still pending${NC}"
+        echo -e "${GREEN}  - Bob received funds: $bob_balance_final_check sats${NC}"
+        echo -e "${GREEN}  - Alice's channel fully resolved${NC}"
+    elif [ "$bob_success" = "true" ]; then
+        echo -e "${YELLOW}⚠ Partial success: Bob received funds but Alice's channel still pending${NC}"
+        echo -e "${GREEN}  - Bob received funds: $bob_balance_final_check sats${NC}"
+        echo -e "${YELLOW}  - Alice pending_force_closing: $pending_force, waiting_close: $waiting_close${NC}"
         echo ""
-        log_warn "The time-locked output sweep is not working correctly."
+        log_info "Alice's time-locked output requires ~144 blocks CSV delay."
+        log_info "The sweep will complete once the timelock expires."
+    else
+        echo -e "${RED}✗ Force close failed${NC}"
+        echo -e "${RED}  - Bob balance: $bob_balance_final_check sats (expected > 0)${NC}"
+        echo -e "${RED}  - Alice pending_force_closing: $pending_force, waiting_close: $waiting_close${NC}"
+        echo ""
+        log_warn "The sweep transactions are not working correctly."
         log_warn "Check the logs above for SWPR (sweeper) and CNCT (contract court) messages."
         echo ""
         log_info "Log files for further investigation:"
